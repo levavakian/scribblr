@@ -15,6 +15,8 @@ The user's answers (2026-10-17) to questions about `docs/human/spec.md`, plus th
 | Revisits | Reshuffle daily. Chunk selection is seeded from (text, settings, local date), so within a day the same text gets the same chunks and cached translations. The next day brings a new selection. |
 | Platform | Chrome runs on **Windows**. The user builds inside **WSL** with nix and loads the unpacked build into Windows Chrome. This server is headless and has no Chrome. |
 | Streaming text (spec line added after the Q&A) | Text that streams in after the page loaded (an AI chat reply, a live chat) must be translated too. |
+| Model choice (spec line added later) | "Let you choose the order and which models are active." Implemented in `shared/models.ts` and the popup's Models section:<br>• Every listed Flash and Flash-Lite model, stable and preview, gets an on/off switch and up/down buttons.<br>• `settings.models` stores `{order, off, on}` relative to the defaults: stable models on, previews off, newest first. A custom order keeps new releases at its end; with no custom order they join in default position.<br>• Changing the models lifts a daily pause, since a model just switched on may have quota.<br>• With every model off, requests stop with a message. |
+| Strict chunks (spec line added later) | The prompt must say the translation covers only the chunk: "What are you talking <chunk>about</chunk>" → "sobre" / "de qué", never "de qué estás hablando". This is now the first rule in `systemInstruction`, with that example. `npm run test:live` checks it with five tempting fragments, which pass on Flash-Lite. |
 
 ## How streaming text is handled
 
@@ -42,7 +44,7 @@ The user's answers (2026-10-17) to questions about `docs/human/spec.md`, plus th
   - 5xx errors fall through to the next model for that request only.
 - Rate limits:
   - A per-minute 429 pauses for the `RetryInfo` delay (60s if absent) and does not switch model.
-  - A per-day 429 moves to the next model. When every model is exhausted, pause until midnight Pacific, when RPD resets.
+  - A per-day 429 marks that model used up until the reset time Google gives in the error ("Please retry in 10h46m4.25s", also in RetryInfo; at least 1 minute). Without a hint, it's used up until midnight Pacific. The chain moves to the next model, and once every model is used up, everything pauses until the earliest reset.
   - The popup and the toolbar badge (`||`) show the paused state and when it resumes.
   - Requests are paced locally at 8 per minute per model.
   - Cached translations are still served while paused.
@@ -59,7 +61,7 @@ The user's answers (2026-10-17) to questions about `docs/human/spec.md`, plus th
 - Free-tier limits aren't published; AI Studio shows each project's limits. Community reports from Sep–Oct 2026:
   - `gemini-3.8-flash` and the 3.7, 3.6 and 3.5 Flash models: about **20 RPD** each.
   - 3.5 and 3.1 Flash-Lite: about **500 RPD** each.
-  - RPD resets at midnight Pacific.
+  - RPD resets at midnight Pacific, per the docs. The live API disagreed: on 2026-10-17 at 13:13 UTC, 3.8 Flash's daily 429 said "limit: 20 … Please retry in 10h46m", which is midnight UTC. Thirty seconds later a request to the same model succeeded anyway, so enforcement is loose. Trust the per-error hint over the documented reset.
 - Flash models visible to the user's key on 2026-10-17:
   - Flash: `gemini-3.8-flash`, `-3.7-flash`, `-3.6-flash`, `-3.5-flash`, `-3-flash-preview`, `-2.5-flash`.
   - Flash-Lite: `-3.5-flash-lite`, `-3.1-flash-lite`, `-3.1-flash-lite-preview`, `-2.5-flash-lite`.

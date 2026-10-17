@@ -1,5 +1,16 @@
 import { LANGUAGES, languageName } from '../shared/languages';
 import { type PageStats, type Status, sendToBackground } from '../shared/messages';
+import {
+  DEFAULT_MODEL_PREFS,
+  FALLBACK_MODELS,
+  type ModelChoice,
+  type ModelPrefs,
+  activeModels,
+  applyModelPrefs,
+  moveModel,
+  prettyModel,
+  setModelEnabled,
+} from '../shared/models';
 import { type Settings, chunkSizeLabel, isSiteDisabled } from '../shared/settings';
 import { type KeyStatus, getStored, loadSettings, saveSettings } from '../shared/storage';
 import { formatDuration } from '../shared/time';
@@ -14,13 +25,6 @@ let tab: chrome.tabs.Tab | undefined;
 let host: string | null = null;
 let status: Status | null = null;
 let editingKey = false;
-
-function prettyModel(model: string): string {
-  return model
-    .replace(/^gemini-/, 'Gemini ')
-    .replace(/-flash-lite$/, ' Flash-Lite')
-    .replace(/-flash$/, ' Flash');
-}
 
 // ---- Brand: SCRIBBLR on split-flap tiles that flip in when the popup opens ----
 
@@ -175,6 +179,99 @@ function bindKey(): void {
   });
 }
 
+// ---- Models ----
+
+let modelsRendered = false;
+
+function modelChoices(): ModelChoice[] {
+  return applyModelPrefs(status?.models.length ? status.models : FALLBACK_MODELS, settings.models);
+}
+
+function iconButton(text: string, label: string, disabled: boolean, onClick: () => void): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'icon';
+  button.textContent = text;
+  button.title = label;
+  button.setAttribute('aria-label', label);
+  button.disabled = disabled;
+  button.addEventListener('click', onClick);
+  return button;
+}
+
+async function updateModels(prefs: ModelPrefs, focus?: { model: string; direction: 'up' | 'down' }): Promise<void> {
+  await update({ models: prefs });
+  renderModels();
+  renderStatus();
+  if (!focus) return;
+  // Keep keyboard focus on the moved model, so it can be moved again.
+  const row = document.querySelector<HTMLLIElement>(`.model-row[data-model="${CSS.escape(focus.model)}"]`);
+  const buttons = row?.querySelectorAll<HTMLButtonElement>('button.icon');
+  const target = focus.direction === 'up' ? buttons?.[0] : buttons?.[1];
+  (target && !target.disabled ? target : row?.querySelector('input'))?.focus();
+}
+
+function renderModels(): void {
+  modelsRendered = Boolean(status);
+  const choices = modelChoices();
+  const prefs = settings.models ?? DEFAULT_MODEL_PREFS;
+  $('model-list').replaceChildren(
+    ...choices.map((choice, i) => {
+      const row = document.createElement('li');
+      row.className = `model-row${choice.enabled ? '' : ' off'}`;
+      row.dataset.model = choice.model;
+      const label = document.createElement('label');
+      label.className = 'model-toggle';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = choice.enabled;
+      box.addEventListener('change', () => void updateModels(setModelEnabled(prefs, choice.model, box.checked)));
+      const name = document.createElement('span');
+      name.className = 'model-name';
+      name.textContent = prettyModel(choice.model);
+      label.append(box, name);
+      const meta = document.createElement('span');
+      meta.className = 'model-meta';
+      const pretty = prettyModel(choice.model);
+      row.append(
+        label,
+        meta,
+        iconButton('↑', `Move ${pretty} up`, i === 0, () =>
+          void updateModels(moveModel(choices, prefs, choice.model, -1), { model: choice.model, direction: 'up' }),
+        ),
+        iconButton('↓', `Move ${pretty} down`, i === choices.length - 1, () =>
+          void updateModels(moveModel(choices, prefs, choice.model, 1), { model: choice.model, direction: 'down' }),
+        ),
+      );
+      return row;
+    }),
+  );
+  const active = choices.filter((c) => c.enabled);
+  $('models-warning').hidden = active.length > 0;
+  $('models-summary').textContent = active.length
+    ? `${prettyModel(active[0]!.model).replace(/^Gemini /, '')} first, ${active.length} on`
+    : 'all switched off';
+  renderModelMeta();
+}
+
+/** Today's request count and whether the daily quota is used up, per model. */
+function renderModelMeta(): void {
+  const now = Date.now();
+  for (const row of document.querySelectorAll<HTMLLIElement>('.model-row')) {
+    const model = row.dataset.model!;
+    const until = status?.rate.exhausted[model] ?? 0;
+    const used = status?.usage.counts[model];
+    const parts = [used ? `${used} today` : '', until > now ? `used up for ${formatDuration(until - now)}` : ''].filter(Boolean);
+    row.querySelector('.model-meta')!.textContent = parts.join(' · ');
+    row.classList.toggle('exhausted', until > now);
+  }
+}
+
+function bindModels(): void {
+  if (isPage) $<HTMLDetailsElement>('models').open = true;
+  $('models-reset').addEventListener('click', () => void updateModels(DEFAULT_MODEL_PREFS));
+}
+
 // ---- Status ----
 
 function renderStatus(): void {
@@ -188,14 +285,15 @@ function renderStatus(): void {
     const left = formatDuration(rate.pausedUntil - now);
     pauseLine.textContent =
       rate.pauseReason === 'daily'
-        ? `Paused for ${left}: every free-tier model has used up today's quota. Quotas reset at midnight Pacific time.`
+        ? `Paused for ${left}: every free-tier model has used up its daily quota.`
         : `Paused for ${left}: Gemini's per-minute limit was reached.`;
   }
 
-  const usable = models.filter((m) => !((rate.exhausted[m] ?? 0) > now));
-  const exhausted = models.filter((m) => (rate.exhausted[m] ?? 0) > now);
+  const active = activeModels(models, settings.models);
+  const usable = active.filter((m) => !((rate.exhausted[m] ?? 0) > now));
+  const exhausted = active.filter((m) => (rate.exhausted[m] ?? 0) > now);
   const current = usable[0];
-  let modelText = current ? `Translating with ${prettyModel(current)}` : 'No model available right now';
+  let modelText = current ? `Translating with ${prettyModel(current)}` : active.length ? 'No model available right now' : 'Every model is switched off';
   if (exhausted.length && current) modelText += ` (${exhausted.map(prettyModel).join(', ')} used up for today)`;
   $('model-line').textContent = status.hasKey ? `${modelText}.` : 'Add an API key to start translating.';
 
@@ -217,6 +315,8 @@ async function refreshStatus(): Promise<void> {
   const [apiKey, keyStatus] = await Promise.all([getStored('apiKey'), getStored('keyStatus')]);
   renderKey(apiKey, keyStatus);
   renderStatus();
+  if (!modelsRendered) renderModels();
+  else renderModelMeta();
 }
 
 async function refreshPage(): Promise<void> {
@@ -261,6 +361,7 @@ async function main(): Promise<void> {
   renderSettings();
   bindSettings();
   bindKey();
+  bindModels();
   $('redo').addEventListener('click', async () => {
     if (tab?.id === undefined) return;
     await chrome.tabs.sendMessage(tab.id, { type: 'redo' }).catch(() => {});

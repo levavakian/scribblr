@@ -1,4 +1,5 @@
-// Gemini's free-tier daily quotas reset at midnight Pacific time.
+// Google's docs say free-tier daily quotas reset at midnight Pacific time. The API's own retry
+// hints are preferred when present (see background/translate.ts).
 const PACIFIC = 'America/Los_Angeles';
 
 const pacificParts = new Intl.DateTimeFormat('en-US', {

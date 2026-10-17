@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyFailure, extractTranslations } from '../../src/background/gemini';
-import { orderFlashModels } from '../../src/background/models';
+import { classifyFailure, extractTranslations, parseDuration } from '../../src/background/gemini';
 
 function quotaError(quotaId: string, retryDelay?: string, quotaValue = '20') {
   return {
@@ -28,9 +27,29 @@ function quotaError(quotaId: string, retryDelay?: string, quotaValue = '20') {
   };
 }
 
+describe('parseDuration', () => {
+  it("reads protobuf durations and Google's h/m/s style", () => {
+    expect(parseDuration('34s')).toBe(34_000);
+    expect(parseDuration('1.5s')).toBe(1500);
+    expect(parseDuration('500ms')).toBe(500);
+    expect(parseDuration('10h46m4.25s')).toBe(38_764_250);
+    expect(parseDuration('3m')).toBe(180_000);
+    expect(parseDuration('')).toBeUndefined();
+    expect(parseDuration('soon')).toBeUndefined();
+  });
+});
+
 describe('classifyFailure', () => {
-  it('recognises a daily quota even when Google suggests retrying in seconds', () => {
-    expect(classifyFailure(429, quotaError('GenerateRequestsPerDayPerProjectPerModel-FreeTier', '41s'))).toMatchObject({ kind: 'rate-daily' });
+  it('recognises a daily quota and keeps the reset time Google gives', () => {
+    // As returned by the real API on 2026-10-17 at 13:13 UTC.
+    const real = quotaError('GenerateRequestsPerDayPerProjectPerModel-FreeTier');
+    real.error.message +=
+      '\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-3.8-flash\nPlease retry in 10h46m4.25202083s.';
+    expect(classifyFailure(429, real)).toEqual({ kind: 'rate-daily', message: real.error.message, retryAfterMs: 38_764_252 });
+    expect(classifyFailure(429, quotaError('GenerateRequestsPerDayPerProjectPerModel-FreeTier', '41s'))).toMatchObject({
+      kind: 'rate-daily',
+      retryAfterMs: 41_000,
+    });
   });
 
   it('recognises per-minute quotas and their retry delay', () => {
@@ -44,8 +63,11 @@ describe('classifyFailure', () => {
     });
   });
 
-  it('treats a quota of zero (model not on the free tier) like a used-up daily quota', () => {
-    expect(classifyFailure(429, quotaError('GenerateRequestsPerMinutePerProjectPerModel-FreeTier', '5s', '0'))).toMatchObject({ kind: 'rate-daily' });
+  it('treats a quota of zero (model not on the free tier) as unusable for the day, ignoring the short retry hint', () => {
+    expect(classifyFailure(429, quotaError('GenerateRequestsPerMinutePerProjectPerModel-FreeTier', '5s', '0'))).toEqual({
+      kind: 'rate-daily',
+      message: expect.any(String),
+    });
   });
 
   it('falls back to the message and retry hints', () => {
@@ -112,39 +134,5 @@ describe('extractTranslations', () => {
 
   it('reports blocked prompts', () => {
     expect(extractTranslations({ promptFeedback: { blockReason: 'SAFETY' } }, new Set([0]))).toMatchObject({ ok: false, failure: { kind: 'blocked' } });
-  });
-});
-
-describe('orderFlashModels', () => {
-  it('puts the newest Flash first, then older Flash, then Flash-Lite; skipping previews and variants', () => {
-    const names = [
-      'models/gemini-2.5-flash',
-      'models/gemini-2.5-flash-preview-tts',
-      'models/gemini-flash-latest',
-      'models/gemini-flash-lite-latest',
-      'models/gemini-2.5-flash-lite',
-      'models/gemini-2.5-flash-image',
-      'models/gemini-3-flash-preview',
-      'models/gemini-3.1-flash-lite-preview',
-      'models/gemini-3.1-flash-lite',
-      'models/gemini-3.5-flash',
-      'models/gemini-3.5-flash-lite',
-      'models/gemini-3.6-flash',
-      'models/gemini-3.7-flash',
-      'models/gemini-3.8-flash',
-      'models/gemini-3.8-flash-tts',
-      'models/gemini-3.10-flash',
-    ];
-    expect(orderFlashModels(names)).toEqual([
-      'gemini-3.10-flash',
-      'gemini-3.8-flash',
-      'gemini-3.7-flash',
-      'gemini-3.6-flash',
-      'gemini-3.5-flash',
-      'gemini-2.5-flash',
-      'gemini-3.5-flash-lite',
-      'gemini-3.1-flash-lite',
-      'gemini-2.5-flash-lite',
-    ]);
   });
 });

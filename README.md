@@ -92,7 +92,7 @@ Scribblr checks the key with one tiny request before saving it.
   allows about 20 requests a day for each recent Flash model and about 500 a day for Flash-Lite
   models. Scribblr starts each day on the newest Flash model. When a model's daily quota is used
   up, it moves to the next one: older Flash models first, then Flash-Lite. Once every model is
-  used up, it pauses until the quotas reset at midnight Pacific time. If it hits a per-minute
+  used up, it pauses until the first one resets, at the time Google gives in its error. If it hits a per-minute
   limit, it pauses for as long as Google asks. While paused, the toolbar icon shows `||`, and
   already-cached translations still appear.
 - **Privacy:** Scribblr sends the text of the pages you visit to Google's Gemini API. Google may use
@@ -104,6 +104,12 @@ Scribblr checks the key with one tiny request before saving it.
 - **Popup:** the master switch, a per-site switch, your languages, the two sliders, which model is
   in use, today's request count, and any pause or error. Settings apply to text translated from
   then on; **Redo this page** re-applies them to the current page.
+- **Models** (in the popup): every Gemini Flash and Flash-Lite model your key can use, in the
+  order Scribblr tries them. Switch models on or off and move them up or down. Scribblr uses the
+  first model that's on and still has quota, moving down the list as each runs out. The default
+  order is newest Flash first; new releases join it on their own, or go at the end of a custom
+  order. Preview models are off by default; each has its own free quota, so switching them on adds
+  capacity. Each row shows its requests today and when a used-up model is available again.
 - **Hover** a translated chunk to see the original.
 - Only text that Chrome's built-in language detection identifies as the language you read gets
   translated, so pages and posts in other languages stay as they are.

@@ -4,7 +4,7 @@ const REQUEST_TIMEOUT_MS = 90_000;
 
 export type FailureKind =
   | 'rate-minute' // a per-minute quota: wait retryAfterMs
-  | 'rate-daily' // this model's daily quota is used up (resets at midnight Pacific)
+  | 'rate-daily' // this model's daily quota is used up (retryAfterMs: when Google says it resets)
   | 'invalid-key'
   | 'billing' // HTTP 402: the key's project is on prepaid billing and out of credits
   | 'bad-request'
@@ -22,10 +22,14 @@ export interface Failure {
 
 export type Outcome<T> = { ok: true; value: T } | { ok: false; failure: Failure };
 
-/** Parses durations like "34s" or "1.5s" (protobuf Duration JSON). */
-function parseDuration(value: unknown): number | undefined {
-  const m = /^([\d.]+)s$/.exec(String(value ?? ''));
-  return m ? Math.round(Number(m[1]) * 1000) : undefined;
+/** Parses "34s", "1.5s", "500ms" and Google's "10h46m4.25s"; undefined if it isn't a duration. */
+export function parseDuration(value: unknown): number | undefined {
+  const text = String(value ?? '').trim();
+  const ms = /^([\d.]+)ms$/.exec(text);
+  if (ms) return Math.round(Number(ms[1]));
+  const m = /^(?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?$/.exec(text);
+  if (!text || !m || (m[1] ?? m[2] ?? m[3]) === undefined) return undefined;
+  return Math.round(((Number(m[1] ?? 0) * 60 + Number(m[2] ?? 0)) * 60 + Number(m[3] ?? 0)) * 1000);
 }
 
 /** Works out what a failed Gemini response means; 429s are told apart by their quota ids. */
@@ -67,13 +71,16 @@ export function classifyFailure(status: number, payload: unknown, retryAfterHead
       else if (/per minute/i.test(message)) perMinute = true;
     }
     retryAfterMs ??= (() => {
-      const m = /retry in ([\d.]+)\s*(ms|s)\b/i.exec(message);
-      if (m) return Math.round(Number(m[1]) * (m[2]!.toLowerCase() === 'ms' ? 1 : 1000));
+      const m = /retry in ((?:\d+h)?(?:\d+m(?!s))?(?:[\d.]+(?:ms|s))?)/i.exec(message);
+      const fromMessage = m ? parseDuration(m[1]) : undefined;
+      if (fromMessage !== undefined) return fromMessage;
       const header = Number(retryAfterHeader);
       return Number.isFinite(header) && header > 0 ? header * 1000 : undefined;
     })();
-    // A limit of 0 means the model isn't on the free tier at all: skip it like a used-up daily quota.
-    if (daily || noFreeTier) return { kind: 'rate-daily', message };
+    // A limit of 0 means the model isn't on the free tier at all: skip it for the day.
+    if (noFreeTier) return { kind: 'rate-daily', message };
+    // For daily quotas Google says when the quota resets ("retry in 10h46m4.25s"); keep that.
+    if (daily) return { kind: 'rate-daily', message, ...(retryAfterMs !== undefined ? { retryAfterMs } : {}) };
     if (perMinute || retryAfterMs === undefined || retryAfterMs <= 15 * 60_000) {
       return { kind: 'rate-minute', message, retryAfterMs: retryAfterMs ?? 60_000 };
     }

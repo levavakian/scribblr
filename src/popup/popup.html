@@ -77,6 +77,24 @@
         <p class="note">Changes apply to text translated from now on.</p>
       </section>
 
+      <section class="card">
+        <details id="models">
+          <summary>
+            <span>Models</span>
+            <span class="summary-detail" id="models-summary"></span>
+          </summary>
+          <p class="note">
+            Scribblr uses the first model that's switched on and still has quota today. When its daily quota runs
+            out, it moves down the list.
+          </p>
+          <ol class="model-list" id="model-list"></ol>
+          <div class="row models-foot">
+            <span class="note bad" id="models-warning" hidden>Switch on at least one model, or nothing gets translated.</span>
+            <button type="button" class="link" id="models-reset">Reset to default</button>
+          </div>
+        </details>
+      </section>
+
       <section class="card status-card">
         <p class="status" id="pause-line" hidden></p>
         <p class="status" id="model-line"></p>

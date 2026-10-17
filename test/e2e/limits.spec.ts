@@ -1,7 +1,7 @@
 import type { KeyStatus, ModelList, RateState } from '../../src/shared/storage';
 import { nextPacificMidnight } from '../../src/shared/time';
 import { expect, stored, test } from './fixtures';
-import { MODELS } from './mock-gemini';
+import { MODELS, nextUtcMidnight } from './mock-gemini';
 
 test('pauses after a per-minute limit, then carries on with the same model', async ({ configure, openPage, gemini, worker }) => {
   gemini.script('gemini-3.8-flash', 'minute');
@@ -27,20 +27,29 @@ test('moves to the next model when the daily quota runs out', async ({ configure
   await expect.poll(() => gemini.requests.length).toBeGreaterThanOrEqual(3);
   const models = gemini.requests.map((r) => r.model);
   expect(models[0]).toBe('gemini-3.8-flash');
-  // The exhausted model isn't tried again today.
+  // The exhausted model isn't tried again until the reset time Google gave (midnight UTC here).
   expect(models.slice(1).every((m) => m === 'gemini-3.7-flash')).toBe(true);
   const rate = await stored<RateState>(worker, 'rateState');
-  expect(rate.exhausted['gemini-3.8-flash']).toBe(nextPacificMidnight());
+  expect(Math.abs(rate.exhausted['gemini-3.8-flash']! - nextUtcMidnight())).toBeLessThan(5000);
   expect(rate.pausedUntil).toBeLessThan(Date.now());
 });
 
-test('pauses until midnight Pacific once every model has used up its daily quota', async ({ configure, openPage, gemini, worker }) => {
+test('without a reset time from Google, waits until midnight Pacific as the docs say', async ({ configure, openPage, gemini, worker }) => {
+  gemini.always('gemini-3.8-flash', 'daily-no-hint');
+  await configure({ percent: 50 });
+  const page = await openPage('article.html');
+  await expect(page.locator('scribblr-t').first()).toBeAttached({ timeout: 15_000 });
+  const rate = await stored<RateState>(worker, 'rateState');
+  expect(rate.exhausted['gemini-3.8-flash']).toBe(nextPacificMidnight());
+});
+
+test('pauses until the first quota resets once every model has used up its daily quota', async ({ configure, openPage, gemini, worker }) => {
   gemini.always('*', 'daily');
   await configure({ percent: 50 });
   const page = await openPage('article.html');
   await expect.poll(async () => (await stored<RateState>(worker, 'rateState'))?.pauseReason).toBe('daily');
   const rate = await stored<RateState>(worker, 'rateState');
-  expect(rate.pausedUntil).toBe(nextPacificMidnight());
+  expect(Math.abs(rate.pausedUntil - nextUtcMidnight())).toBeLessThan(5000);
   // Each model was tried exactly once.
   expect(gemini.requests.map((r) => r.model).sort()).toEqual([...MODELS].sort());
 

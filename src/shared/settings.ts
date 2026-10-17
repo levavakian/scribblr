@@ -1,4 +1,5 @@
 import { matchLanguage, primaryLanguage } from './languages';
+import { DEFAULT_MODEL_PREFS, type ModelPrefs } from './models';
 
 export interface Settings {
   /** Master switch. */
@@ -13,6 +14,8 @@ export interface Settings {
   percent: number;
   /** 0–100: the typical chunk size, from single words (0) to whole paragraphs (100). */
   chunkSize: number;
+  /** Which Gemini models to use, and in what order. */
+  models: ModelPrefs;
 }
 
 export function defaultSettings(uiLocale = safeUiLocale()): Settings {
@@ -24,6 +27,7 @@ export function defaultSettings(uiLocale = safeUiLocale()): Settings {
     targetLang: primaryLanguage(sourceLang) === 'es' ? 'en' : 'es',
     percent: 30,
     chunkSize: 30,
+    models: DEFAULT_MODEL_PREFS,
   };
 }
 

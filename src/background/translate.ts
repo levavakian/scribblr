@@ -1,10 +1,10 @@
 import { hashKey } from '../shared/hash';
 import type { TranslateRequest, TranslateResult } from '../shared/messages';
-import { type RateState, getStored, loadRateState, setStored } from '../shared/storage';
+import { type RateState, getStored, loadRateState, loadSettings, setStored } from '../shared/storage';
 import { nextPacificMidnight, pacificDay } from '../shared/time';
 import { getCached, putCached } from './cache';
 import { DEFAULT_API_BASE, type Failure, extractTranslations, generateContent, listModels } from './gemini';
-import { FALLBACK_MODELS, orderFlashModels } from './models';
+import { FALLBACK_MODELS, activeModels, orderFlashModels } from '../shared/models';
 import { requestBody, thinkingConfig } from './prompt';
 
 const MAX_CONCURRENT = 2;
@@ -13,6 +13,7 @@ const MAX_PER_MINUTE = 8;
 const MAX_LOCAL_WAIT_MS = 20_000;
 const ERROR_RETRY_MS = 20_000;
 const MODEL_LIST_MAX_AGE_MS = 12 * 3600_000;
+const NO_MODELS_MESSAGE = "Every model is switched off in Scribblr's settings, so nothing can be translated.";
 
 // ---- State helpers --------------------------------------------------------------------------
 
@@ -186,11 +187,16 @@ async function translateMissing(
     const rate = await loadRateState();
     if (now < rate.pausedUntil) return { translations, pending: { reason: 'paused', until: rate.pausedUntil } };
 
-    const chain = await modelChain(apiKey, base);
+    // The user's order and on/off switches, applied to the models this key can use.
+    const chain = activeModels(await modelChain(apiKey, base), (await loadSettings()).models);
+    if (!chain.length) {
+      return { translations, pending: { reason: 'error', until: now + 60_000, message: NO_MODELS_MESSAGE } };
+    }
     const usable = chain.filter((m) => !((rate.exhausted[m] ?? 0) > now));
     if (!usable.length) {
-      // Every model's daily quota is used up: pause until they reset at midnight Pacific.
-      const until = nextPacificMidnight(now);
+      // Every model's daily quota is used up: pause until the first one resets.
+      const resets = chain.map((m) => rate.exhausted[m] ?? 0).filter((t) => t > now);
+      const until = resets.length ? Math.min(...resets) : nextPacificMidnight(now);
       await updateRate((r) => ({ ...r, pausedUntil: until, pauseReason: 'daily' }));
       return { translations, pending: { reason: 'paused', until } };
     }
@@ -225,9 +231,13 @@ async function translateMissing(
     const failure = outcome.failure;
     lastFailure = failure;
     switch (failure.kind) {
-      case 'rate-daily':
-        await updateRate((r) => ({ ...r, exhausted: { ...r.exhausted, [model]: nextPacificMidnight() } }));
+      case 'rate-daily': {
+        // Trust the reset time Google sends with the error. The docs say midnight Pacific, but the
+        // API has pointed at midnight UTC. Without a hint, fall back to the docs.
+        const until = failure.retryAfterMs !== undefined ? Date.now() + Math.max(60_000, failure.retryAfterMs) : nextPacificMidnight();
+        await updateRate((r) => ({ ...r, exhausted: { ...r.exhausted, [model]: until } }));
         continue;
+      }
       case 'rate-minute': {
         const until = Date.now() + (failure.retryAfterMs ?? 60_000) + 1000;
         await updateRate((r) => ({ ...r, pausedUntil: until, pauseReason: 'minute' }));

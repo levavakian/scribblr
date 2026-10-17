@@ -323,6 +323,125 @@ input[type="range"] {
   color: var(--ink-soft);
 }
 
+/* Models: a collapsible, reorderable list. */
+details > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+details > summary::after {
+  content: "▸";
+  color: var(--muted);
+  transition: transform 120ms ease;
+}
+
+details[open] > summary::after {
+  transform: rotate(90deg);
+}
+
+.summary-detail {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.model-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 2px 2px 6px;
+  border-radius: 6px;
+}
+
+.model-row:hover {
+  background: #f5f4ef;
+}
+
+.model-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.model-toggle input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--ink);
+}
+
+.model-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.model-row.off .model-name {
+  color: var(--muted);
+}
+
+.model-meta {
+  margin-right: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.model-row.exhausted .model-meta {
+  color: var(--warn);
+}
+
+button.icon {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+button.icon:hover:not(:disabled) {
+  background: #ebe9e2;
+}
+
+button.icon:disabled {
+  opacity: 0.25;
+}
+
+.models-foot {
+  margin-top: 6px;
+}
+
+.models-foot .note {
+  margin-top: 0;
+}
+
+.models-foot .link {
+  margin-left: auto;
+  font-size: 12px;
+}
+
 /* The switch: a checkbox with a track and a thumb. */
 .switch {
   position: relative;

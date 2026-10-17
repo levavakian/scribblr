@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { requestBody, thinkingConfig, userPrompt } from '../../src/background/prompt';
+import { requestBody, systemInstruction, thinkingConfig, userPrompt } from '../../src/background/prompt';
 import type { TranslateRequest } from '../../src/shared/messages';
 
 const request: TranslateRequest = {
@@ -31,6 +31,17 @@ describe('userPrompt', () => {
     const prompt = userPrompt(request, new Set([0]));
     expect(prompt).toContain('<block tag="button">Learn more about cows?</block>');
     expect(prompt).toMatch(/Translate chunk 0 into Spanish\.$/);
+  });
+});
+
+describe('systemInstruction', () => {
+  it('insists on translating only the chunk, with the example from the spec', () => {
+    const system = systemInstruction('en', 'es');
+    expect(system).toContain('Translate only the words inside each chunk');
+    expect(system).toContain('"What are you talking <chunk id="0">about</chunk>?"');
+    expect(system).toContain('never "¿De qué estás hablando?"');
+    // It comes first, before every other rule.
+    expect(system.indexOf('Translate only the words')).toBeLessThan(system.indexOf("Don't add words"));
   });
 });
 

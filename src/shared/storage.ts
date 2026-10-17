@@ -24,7 +24,7 @@ export interface RateState {
   /** While Date.now() < pausedUntil, no Gemini requests are made. */
   pausedUntil: number;
   pauseReason: 'minute' | 'daily' | null;
-  /** Model → time its daily free-tier quota resets (midnight Pacific). */
+  /** Model → when its daily free-tier quota resets (Google's retry hint, else midnight Pacific). */
   exhausted: Record<string, number>;
   lastModel: string | null;
   lastError: { message: string; at: number } | null;
@@ -41,7 +41,7 @@ export interface ModelList {
 }
 
 export interface Usage {
-  /** Pacific-time day the counts belong to (quotas reset at midnight Pacific). */
+  /** Pacific-time day the counts belong to (Google's documented reset). */
   day: string;
   counts: Record<string, number>;
 }

@@ -6,7 +6,19 @@ import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { parseMarkup } from '../../src/shared/markup';
 
-export type Behavior = 'ok' | 'minute' | 'daily' | 'billing' | 'not-found' | 'overloaded';
+export type Behavior = 'ok' | 'minute' | 'daily' | 'daily-no-hint' | 'billing' | 'not-found' | 'overloaded';
+
+/** When the real API's free-tier daily quotas said they'd reset: midnight UTC. */
+export function nextUtcMidnight(now = Date.now()): number {
+  const d = new Date(now);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1);
+}
+
+/** Google's "10h46m4.25s" style. */
+function googleDuration(ms: number): string {
+  const s = ms / 1000;
+  return `${Math.floor(s / 3600)}h${Math.floor((s % 3600) / 60)}m${(s % 60).toFixed(2)}s`;
+}
 
 export interface LoggedRequest {
   model: string;
@@ -36,15 +48,16 @@ export function fakeTranslate(markup: string): string {
     .join('');
 }
 
-function quotaError(quotaId: string, retryDelay: string) {
+function quotaError(quotaId: string, retryMs?: number) {
+  const retry = retryMs === undefined ? '' : `\nPlease retry in ${googleDuration(retryMs)}.`;
   return {
     error: {
       code: 429,
-      message: 'You exceeded your current quota.',
+      message: `You exceeded your current quota, please check your plan and billing details.\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20${retry}`,
       status: 'RESOURCE_EXHAUSTED',
       details: [
         { '@type': 'type.googleapis.com/google.rpc.QuotaFailure', violations: [{ quotaId, quotaValue: '20' }] },
-        { '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay },
+        ...(retryMs === undefined ? [] : [{ '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: `${Math.round(retryMs / 1000)}s` }]),
       ],
     },
   };
@@ -156,9 +169,11 @@ export class MockGemini {
 
     switch (behavior) {
       case 'minute':
-        return void json(429, quotaError('GenerateRequestsPerMinutePerProjectPerModel-FreeTier', '2s'));
+        return void json(429, quotaError('GenerateRequestsPerMinutePerProjectPerModel-FreeTier', 2000));
       case 'daily':
-        return void json(429, quotaError('GenerateRequestsPerDayPerProjectPerModel-FreeTier', '30s'));
+        return void json(429, quotaError('GenerateRequestsPerDayPerProjectPerModel-FreeTier', nextUtcMidnight() - Date.now()));
+      case 'daily-no-hint':
+        return void json(429, quotaError('GenerateRequestsPerDayPerProjectPerModel-FreeTier'));
       case 'billing':
         return void json(402, { error: { code: 402, message: 'Your prepayment credits are depleted.', status: 'RESOURCE_EXHAUSTED' } });
       case 'not-found':

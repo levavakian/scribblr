@@ -35,6 +35,7 @@ async function main(): Promise<void> {
     }
     if (changes.keyStatus && (changes.keyStatus.newValue as KeyStatus | undefined)?.state !== 'invalid') controller.unblock();
     if (changes.rateState) controller.onRateState(changes.rateState.newValue as RateState | undefined);
+    if (changes.settings) controller.unblock(); // e.g. a model was switched back on
     if (changes.settings || changes.apiKey) sync();
   });
 

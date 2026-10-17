@@ -42,3 +42,5 @@ Then it should request a structured output of a translation of each of the chunk
 - It should use the latest gemini flash model that is in the free tier
 - If we hit a rate limit, it should pause the extension for an appropriate amount of time depending on if it's a daily limit or a minute-ly limit
 - It should work on new text that streams in after the original text as well (for example, on something like chatgpt where it's a live chat)
+- The prompt should specify that the translation should only strictly be the chunk specified, for example, in "What are you talking <chunk-0>about</chunk-0>", the chunk should be translated to "sobre" or "de que", not "de que estas hablando"
+- The extension should let you choose the order and which models are active for the translation
