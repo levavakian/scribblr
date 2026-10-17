@@ -41,3 +41,4 @@ Then it should request a structured output of a translation of each of the chunk
 - When the translations are received, it should have a split-flap display like effect where the original text becoems the translated text. The translated text should have a dashed underdash to show that it was translated. Hovering over it should show the original text that was replaced.
 - It should use the latest gemini flash model that is in the free tier
 - If we hit a rate limit, it should pause the extension for an appropriate amount of time depending on if it's a daily limit or a minute-ly limit
+- It should work on new text that streams in after the original text as well (for example, on something like chatgpt where it's a live chat)

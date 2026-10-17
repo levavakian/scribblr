@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scribblr</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="panel">
+      <header class="top">
+        <h1 class="brand" aria-label="Scribblr" id="brand"></h1>
+        <label class="switch" title="Turn Scribblr on or off everywhere">
+          <input type="checkbox" id="enabled" />
+          <span class="track"><span class="thumb"></span></span>
+        </label>
+      </header>
+
+      <section class="card key-card" id="key-card">
+        <div class="key-summary" id="key-summary" hidden>
+          <span>Gemini key <code id="key-mask"></code> <span id="key-badge" class="pill"></span></span>
+          <button type="button" class="link" id="change-key">Change</button>
+        </div>
+        <div class="key-form" id="key-form">
+          <h2>Add your Gemini API key</h2>
+          <p class="hint">
+            Scribblr uses the free tier of Google's Gemini API.
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free key</a>, then paste it here.
+          </p>
+          <form class="key-row" id="key-entry">
+            <input id="api-key" type="password" placeholder="Paste your API key" autocomplete="off" spellcheck="false" />
+            <button type="submit" id="save-key">Save</button>
+          </form>
+          <p class="note" id="key-message" role="status"></p>
+        </div>
+      </section>
+
+      <section class="card" id="site-card">
+        <label class="row site-row">
+          <span>Translate on <strong id="site-name"></strong></span>
+          <span class="switch small">
+            <input type="checkbox" id="site-enabled" />
+            <span class="track"><span class="thumb"></span></span>
+          </span>
+        </label>
+      </section>
+
+      <section class="card">
+        <div class="langs">
+          <label class="field">
+            <span class="field-label">I read</span>
+            <select id="source-lang"></select>
+          </label>
+          <button type="button" class="swap" id="swap" title="Swap languages" aria-label="Swap languages">⇄</button>
+          <label class="field">
+            <span class="field-label">I'm learning</span>
+            <select id="target-lang"></select>
+          </label>
+        </div>
+
+        <div class="slider">
+          <div class="slider-head">
+            <label for="percent">Translate</label>
+            <output id="percent-out" for="percent"></output>
+          </div>
+          <input type="range" id="percent" min="5" max="100" step="5" />
+        </div>
+
+        <div class="slider">
+          <div class="slider-head">
+            <label for="chunk-size">Chunk size</label>
+            <output id="size-out" for="chunk-size"></output>
+          </div>
+          <input type="range" id="chunk-size" min="0" max="100" step="5" />
+          <div class="ticks" aria-hidden="true"><span>Word</span><span>Phrase</span><span>Clause</span><span>Sentence</span><span>Paragraph</span></div>
+        </div>
+        <p class="note">Changes apply to text translated from now on.</p>
+      </section>
+
+      <section class="card status-card">
+        <p class="status" id="pause-line" hidden></p>
+        <p class="status" id="model-line"></p>
+        <p class="status muted" id="usage-line"></p>
+        <p class="status error" id="error-line" hidden></p>
+        <div class="row page-row" id="page-row">
+          <p class="status" id="page-line"></p>
+          <button type="button" class="secondary" id="redo" title="Undo this page's translations and translate it again with the current settings">Redo this page</button>
+        </div>
+      </section>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

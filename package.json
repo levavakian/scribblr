@@ -1,0 +1,30 @@
+{
+  "name": "scribblr",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome extension that translates part of every page you read into the language you're learning",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run typecheck && vitest run",
+    "test:e2e": "node scripts/build.mjs && playwright test",
+    "test:live": "vitest run --config vitest.live.config.ts",
+    "icons": "node scripts/make-icons.mjs",
+    "install:windows": "bash scripts/install-windows.sh"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/chrome": "^0.3.5",
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^24.19.2",
+    "esbuild": "^0.28.2",
+    "jsdom": "^30.1.3",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

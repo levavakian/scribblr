@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Chat</title>
+    <style>
+      body { font: 16px/1.5 system-ui, "DejaVu Sans", sans-serif; max-width: 720px; margin: 30px auto; padding: 0 20px; }
+      .msg { margin: 12px 0; padding: 10px 14px; border-radius: 12px; }
+      .user { background: #e8f0fe; }
+      .bot { background: #f4f4f4; }
+      #composer { border: 1px solid #999; padding: 8px; min-height: 40px; }
+    </style>
+  </head>
+  <body>
+    <main id="chat">
+      <div class="msg user"><p>Tell me something interesting about cows, please.</p></div>
+    </main>
+    <div id="composer" contenteditable="true">I am typing a new question about farm animals here.</div>
+    <script>
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      // Streams a reply word by word, updating one text node per paragraph the way React does.
+      window.streamReply = async (paragraphs, delay = 50) => {
+        window.streamDone = false;
+        const msg = document.createElement('div');
+        msg.className = 'msg bot';
+        document.getElementById('chat').append(msg);
+        for (const text of paragraphs) {
+          const p = document.createElement('p');
+          const node = document.createTextNode('');
+          p.append(node);
+          msg.append(p);
+          for (const word of text.split(' ')) {
+            node.data += (node.data ? ' ' : '') + word;
+            await sleep(delay);
+          }
+        }
+        window.streamDone = true;
+        return msg;
+      };
+
+      // A live chat: short messages arriving one after another.
+      window.liveChat = async (lines, delay = 400) => {
+        for (const line of lines) {
+          const msg = document.createElement('div');
+          msg.className = 'msg bot live';
+          msg.textContent = line;
+          document.getElementById('chat').append(msg);
+          await sleep(delay);
+        }
+      };
+    </script>
+  </body>
+</html>

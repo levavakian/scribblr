@@ -1,0 +1,22 @@
+/* A translated chunk: dashed underline; hover shows the original (see tooltip.ts). */
+scribblr-t {
+  display: inline !important;
+  text-decoration-line: underline !important;
+  text-decoration-style: dashed !important;
+  text-decoration-thickness: 1px !important;
+  text-underline-offset: 0.22em !important;
+  text-decoration-skip-ink: none !important;
+  text-decoration-color: color-mix(in srgb, currentColor 70%, transparent) !important;
+  unicode-bidi: isolate;
+  border-radius: 3px;
+  cursor: help;
+  transition: background-color 120ms ease;
+}
+
+scribblr-t[data-flipping] {
+  text-decoration-color: color-mix(in srgb, currentColor 30%, transparent) !important;
+}
+
+scribblr-t[data-hover] {
+  background-color: rgba(250, 204, 21, 0.3) !important;
+}

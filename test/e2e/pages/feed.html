@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Feed</title>
+    <style>
+      body { font: 16px/1.5 system-ui, "DejaVu Sans", sans-serif; max-width: 640px; margin: 30px auto; padding: 0 20px; }
+      article { border-bottom: 1px solid #ddd; padding: 12px 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Farm news</h1>
+    <section id="feed"></section>
+    <script>
+      const posts = [
+        'The new barn is finally finished, and the cows seem to love the extra space.',
+        'Our oldest cow celebrated her fifteenth birthday with a bucket of fresh apples.',
+        'Heavy rain flooded the lower field, so the herd spent the afternoon on the hill.',
+        'A family of swallows has moved into the milking shed for the summer again.',
+        'The vet visited this morning and said every calf is healthy and growing fast.',
+        'We planted clover in the east pasture to give the soil a rest this season.',
+        'Visitors are welcome on Saturdays, but please close every gate behind you.',
+        'The farm shop now sells cheese made from the milk of our own small herd.',
+      ];
+      let next = 0;
+      // Like a single-page app or an infinite feed: posts arrive after the page has loaded.
+      window.loadMore = (count = 4) => {
+        const feed = document.getElementById('feed');
+        for (let i = 0; i < count; i++) {
+          const article = document.createElement('article');
+          const p = document.createElement('p');
+          p.textContent = posts[next++ % posts.length];
+          article.append(p);
+          feed.append(article);
+        }
+      };
+      setTimeout(() => window.loadMore(4), 300);
+    </script>
+  </body>
+</html>
