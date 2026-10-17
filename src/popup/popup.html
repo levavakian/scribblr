@@ -58,21 +58,49 @@
           </label>
         </div>
 
-        <div class="slider">
-          <div class="slider-head">
-            <label for="percent">Translate</label>
-            <output id="percent-out" for="percent"></output>
+        <div class="mode">
+          <div class="mode-head">
+            <span class="mode-title">Shown in <span class="sample" id="shown-lang"></span></span>
+            <span class="mode-hint" id="shown-hint"></span>
           </div>
-          <input type="range" id="percent" min="5" max="100" step="5" />
+          <div class="slider">
+            <div class="slider-head">
+              <label for="percent">Amount</label>
+              <output id="percent-out" for="percent"></output>
+            </div>
+            <input type="range" id="percent" min="0" max="100" step="5" />
+          </div>
+          <div class="slider">
+            <div class="slider-head">
+              <label for="chunk-size">Chunk size</label>
+              <output id="size-out" for="chunk-size"></output>
+            </div>
+            <input type="range" id="chunk-size" min="0" max="100" step="5" />
+            <div class="ticks" aria-hidden="true"><span>Word</span><span>Phrase</span><span>Clause</span><span>Sentence</span><span>Paragraph</span></div>
+          </div>
         </div>
 
-        <div class="slider">
-          <div class="slider-head">
-            <label for="chunk-size">Chunk size</label>
-            <output id="size-out" for="chunk-size"></output>
+        <div class="mode">
+          <div class="mode-head">
+            <span class="mode-title">Left in <span class="sample practice" id="practice-lang"></span> to practice</span>
+            <span class="mode-hint" id="practice-hint"></span>
           </div>
-          <input type="range" id="chunk-size" min="0" max="100" step="5" />
-          <div class="ticks" aria-hidden="true"><span>Word</span><span>Phrase</span><span>Clause</span><span>Sentence</span><span>Paragraph</span></div>
+          <div class="slider">
+            <div class="slider-head">
+              <label for="practice-percent">Amount</label>
+              <output id="practice-out" for="practice-percent"></output>
+            </div>
+            <input type="range" id="practice-percent" min="0" max="100" step="5" />
+          </div>
+          <div class="slider">
+            <div class="slider-head">
+              <label for="practice-size">Chunk size</label>
+              <output id="practice-size-out" for="practice-size"></output>
+            </div>
+            <input type="range" id="practice-size" min="0" max="100" step="5" />
+            <div class="ticks" aria-hidden="true"><span>Word</span><span>Phrase</span><span>Clause</span><span>Sentence</span><span>Paragraph</span></div>
+          </div>
+          <p class="note" id="practice-note" hidden></p>
         </div>
         <p class="note">Changes apply to text translated from now on.</p>
       </section>

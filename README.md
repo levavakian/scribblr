@@ -8,6 +8,9 @@ to see the original text.
 - **You choose how much and how big.** One slider sets the share of words to translate. The other
   sets the typical chunk size, from single words to whole paragraphs; chunks come in a mix of
   sizes around that setting.
+- **Practice chunks.** A second pair of sliders picks chunks to leave in your own language, with a
+  blue dashed underline: translate them in your head, then hover to check against the real
+  translation. They never overlap the translated chunks and go to Gemini in the same request.
 - **Translations are context-aware.** Gemini sees the whole page, with the chunks to translate
   marked, so it can pick the right meaning, gender and tense.
 - **It works on live pages.** Text added after the page loads is translated too: infinite feeds,
@@ -101,8 +104,10 @@ Scribblr checks the key with one tiny request before saving it.
 
 ## Using it
 
-- **Popup:** the master switch, a per-site switch, your languages, the two sliders, which model is
-  in use, today's request count, and any pause or error. Settings apply to text translated from
+- **Popup:** the master switch, a per-site switch, your languages, and two pairs of sliders:
+  amount and chunk size for text **shown in the language you're learning**, and for text **left
+  in your language to practice** on. It also shows which model is in use, today's request count,
+  and any pause or error. Settings apply to text translated from
   then on; **Redo this page** re-applies them to the current page.
 - **Models** (in the popup): every Gemini Flash and Flash-Lite model your key can use, in the
   order Scribblr tries them. Switch models on or off and move them up or down. Scribblr uses the
@@ -110,7 +115,8 @@ Scribblr checks the key with one tiny request before saving it.
   order is newest Flash first; new releases join it on their own, or go at the end of a custom
   order. Preview models are off by default; each has its own free quota, so switching them on adds
   capacity. Each row shows its requests today and when a used-up model is available again.
-- **Hover** a translated chunk to see the original.
+- **Hover** a translated chunk (dark dashed underline) to see the original, or a practice chunk
+  (blue dashed underline) to see its translation.
 - Only text that Chrome's built-in language detection identifies as the language you read gets
   translated, so pages and posts in other languages stay as they are.
 

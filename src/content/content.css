@@ -20,3 +20,26 @@ scribblr-t[data-flipping] {
 scribblr-t[data-hover] {
   background-color: rgba(250, 204, 21, 0.3) !important;
 }
+
+/* A practice chunk: left in the reader's language, with a blue dashed underline that fades in.
+   Hovering shows the translation, to check their own. */
+scribblr-t[data-mode="practice"] {
+  text-decoration-color: rgba(47, 128, 237, 0.85) !important;
+  animation: scribblr-practice-in 700ms ease-out;
+}
+
+scribblr-t[data-mode="practice"][data-hover] {
+  background-color: rgba(47, 128, 237, 0.16) !important;
+}
+
+@keyframes scribblr-practice-in {
+  from {
+    text-decoration-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  scribblr-t[data-mode="practice"] {
+    animation: none;
+  }
+}

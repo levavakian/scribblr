@@ -10,10 +10,15 @@ export interface Settings {
   sourceLang: string;
   /** The language the user is learning. */
   targetLang: string;
-  /** 0–100: the share of words to translate. */
+  /** 0–100: the share of words shown in the target language (hover shows the original). */
   percent: number;
-  /** 0–100: the typical chunk size, from single words (0) to whole paragraphs (100). */
+  /** 0–100: the typical size of those chunks, from single words (0) to whole paragraphs (100). */
   chunkSize: number;
+  /** 0–100: the share of words left in the source language to practice on (hover shows the
+   *  translation). Capped by what the translated chunks leave over. */
+  practicePercent: number;
+  /** 0–100: the typical size of practice chunks. */
+  practiceChunkSize: number;
   /** Which Gemini models to use, and in what order. */
   models: ModelPrefs;
 }
@@ -27,6 +32,8 @@ export function defaultSettings(uiLocale = safeUiLocale()): Settings {
     targetLang: primaryLanguage(sourceLang) === 'es' ? 'en' : 'es',
     percent: 30,
     chunkSize: 30,
+    practicePercent: 10,
+    practiceChunkSize: 30,
     models: DEFAULT_MODEL_PREFS,
   };
 }

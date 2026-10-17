@@ -1,6 +1,6 @@
 import { hashKey } from '../shared/hash';
 import type { TranslateRequest, TranslateResult } from '../shared/messages';
-import { type RateState, getStored, loadRateState, loadSettings, setStored } from '../shared/storage';
+import { type CallLogEntry, type RateState, getStored, loadRateState, loadSettings, setStored } from '../shared/storage';
 import { nextPacificMidnight, pacificDay } from '../shared/time';
 import { getCached, putCached } from './cache';
 import { DEFAULT_API_BASE, type Failure, extractTranslations, generateContent, listModels } from './gemini';
@@ -138,6 +138,13 @@ async function callModel(apiKey: string, base: string, model: string, request: T
   return extractTranslations(response.value, ids);
 }
 
+const LOG_SIZE = 50;
+
+async function logCall(entry: CallLogEntry): Promise<void> {
+  const log = (await getStored('log')) ?? [];
+  await setStored('log', [...log, entry].slice(-LOG_SIZE));
+}
+
 async function noteError(failure: Failure): Promise<void> {
   await updateRate((r) => ({ ...r, lastError: { message: failure.message, at: Date.now() } }));
 }
@@ -211,8 +218,17 @@ async function translateMissing(
     if (slot > now) await sleep(slot - now);
     recentCalls.get(model)!.push(Date.now());
 
+    const started = Date.now();
     const outcome = await callModel(apiKey, base, model, request, ids);
     await countRequest(model);
+    await logCall({
+      at: started,
+      model,
+      outcome: outcome.ok ? 'ok' : outcome.failure.kind,
+      ms: Date.now() - started,
+      chunks: ids.size,
+      ...(outcome.ok ? {} : { detail: outcome.failure.message.slice(0, 300) }),
+    });
 
     if (outcome.ok) {
       const entries: Array<[string, string]> = [];

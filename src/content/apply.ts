@@ -1,4 +1,4 @@
-import { parseMarkup, tagSignature } from '../shared/markup';
+import { collapseWhitespace, parseMarkup, tagSignature } from '../shared/markup';
 import type { ChunkSpec, SlotToken } from './chunks';
 import { OWN_TAG, originalText, ownTextNodes } from './own';
 
@@ -9,9 +9,23 @@ export interface Slot {
   to: string;
 }
 
+/**
+ * 'translate': the chunk is shown in the target language; hovering shows the original.
+ * 'practice': the chunk stays as it is, for the reader to translate in their head; hovering shows
+ * the translation.
+ */
+export type ChunkMode = 'translate' | 'practice';
+
+/** What the tooltip shows for a chunk. */
+export interface Hover {
+  label: string;
+  text: string;
+}
+
 export interface AppliedChunk {
   id: string;
-  original: string;
+  mode: ChunkMode;
+  hover: Hover;
   slots: Slot[];
 }
 
@@ -75,9 +89,24 @@ export function placeTranslation(spec: ChunkSpec, translation: string): Placemen
   return placements;
 }
 
-function makeSlotElement(doc: Document, chunkId: string, text: string): HTMLElement {
+/** A translation as plain text, with each kept element's own text in its place. */
+export function plainTranslation(spec: ChunkSpec, translation: string): string {
+  const kept = new Map(spec.skeleton.flatMap((t) => (t.kind === 'self' ? [[t.n, t.el.textContent ?? ''] as const] : [])));
+  const text = parseMarkup(translation)
+    .map((t) => (t.kind === 'text' ? t.text : t.kind === 'self' ? (kept.get(t.n) ?? '') : ''))
+    .join('');
+  return collapseWhitespace(text).trim();
+}
+
+/** Practice chunks keep their own text: every slot simply shows what it showed before. */
+function practicePlacements(spec: ChunkSpec): Placement[] {
+  return spec.skeleton.flatMap((t) => (t.kind === 'slot' ? [{ kind: 'slot' as const, token: t, to: t.piece.text.slice(t.from, t.to) }] : []));
+}
+
+function makeSlotElement(doc: Document, chunkId: string, text: string, mode: ChunkMode): HTMLElement {
   const el = doc.createElement(OWN_TAG);
   el.setAttribute('data-chunk', chunkId);
+  if (mode === 'practice') el.setAttribute('data-mode', 'practice');
   el.setAttribute('dir', 'auto');
   el.appendChild(doc.createTextNode(text));
   return el;
@@ -89,7 +118,7 @@ function makeSlotElement(doc: Document, chunkId: string, text: string): HTMLElem
  */
 export function applyTranslations(
   doc: Document,
-  items: Array<{ id: string; spec: ChunkSpec; translation: string }>,
+  items: Array<{ id: string; spec: ChunkSpec; translation: string; mode?: ChunkMode }>,
 ): { applied: AppliedBlock; skipped: string[] } {
   const applied: AppliedBlock = { edits: new Map(), inserted: [], chunks: [] };
   const skipped: string[] = [];
@@ -97,12 +126,17 @@ export function applyTranslations(
   const inserts: Array<{ where: 'before' | 'prepend' | 'after'; at: Element; el: HTMLElement; lead: string; trail: string }> = [];
 
   for (const item of items) {
-    const placements = placeTranslation(item.spec, item.translation);
+    const mode = item.mode ?? 'translate';
+    const placements = mode === 'practice' ? practicePlacements(item.spec) : placeTranslation(item.spec, item.translation);
     if (!placements) {
       skipped.push(item.id);
       continue;
     }
-    const chunk: AppliedChunk = { id: item.id, original: item.spec.original, slots: [] };
+    const hover: Hover =
+      mode === 'practice'
+        ? { label: 'Translation', text: plainTranslation(item.spec, item.translation) }
+        : { label: 'Original', text: item.spec.original };
+    const chunk: AppliedChunk = { id: item.id, mode, hover, slots: [] };
     for (const p of placements) {
       if (p.kind === 'slot') {
         // A space at the edge of a slot stays page text when the translation has one there too, so
@@ -121,13 +155,13 @@ export function applyTranslations(
           }
         }
         const from = text.slice(start, end);
-        const el = makeSlotElement(doc, item.id, from);
+        const el = makeSlotElement(doc, item.id, from, mode);
         const list = cuts.get(p.token.piece.node) ?? [];
         list.push({ from: start, to: end, el, original: text });
         cuts.set(p.token.piece.node, list);
         chunk.slots.push({ el, from, to });
       } else {
-        const el = makeSlotElement(doc, item.id, '');
+        const el = makeSlotElement(doc, item.id, '', mode);
         const core = p.to.trim();
         inserts.push({ where: p.where, at: p.el, el, lead: /^\s*/.exec(p.to)![0], trail: core ? /\s*$/.exec(p.to)![0] : '' });
         chunk.slots.push({ el, from: '', to: core });

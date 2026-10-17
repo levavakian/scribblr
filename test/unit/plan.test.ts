@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { levelWeights, planChunks } from '../../src/content/plan';
+import { levelWeights, planBoth, planChunks } from '../../src/content/plan';
 import { segmentText } from '../../src/content/segment';
 import { seededRandom } from '../../src/shared/hash';
 
@@ -108,5 +108,62 @@ describe('planChunks', () => {
     const weights = levelWeights(1);
     expect(weights.indexOf(Math.max(...weights))).toBe(1);
     expect(weights[0]).toBeGreaterThan(weights[3]!);
+  });
+});
+
+describe('planBoth (translated and practice chunks)', () => {
+  const plan = (text: string, p1: number, p2: number, seed: number, s1 = 1, s2 = 1) => {
+    const seg = segmentText(text, 'en');
+    const result = planBoth(
+      seg,
+      { fraction: p1, sizeLevel: s1, random: seededRandom(seed) },
+      { fraction: p2, sizeLevel: s2, random: seededRandom(seed + 7_919) },
+    );
+    const words = (chunks: Array<{ startUnit: number; endUnit: number }>) =>
+      chunks.reduce((n, c) => n + seg.units.slice(c.startUnit, c.endUnit).filter((u) => u.translatable).length, 0);
+    const total = seg.units.filter((u) => u.translatable).length;
+    return { ...result, seg, translatedShare: words(result.translate) / total, practiceShare: words(result.practice) / total };
+  };
+
+  it('never overlaps the two kinds of chunk', () => {
+    for (let seed = 0; seed < 300; seed++) {
+      const { translate, practice } = plan(ARTICLE, 0.4, 0.4, seed, seed % 5, (seed + 2) % 5);
+      const covered = new Set<number>();
+      for (const c of translate) for (let i = c.startUnit; i < c.endUnit; i++) covered.add(i);
+      for (const c of practice) for (let i = c.startUnit; i < c.endUnit; i++) expect(covered.has(i)).toBe(false);
+    }
+  });
+
+  it('gives each kind its own share of the words', () => {
+    const runs = Array.from({ length: 300 }, (_, seed) => plan(ARTICLE, 0.3, 0.2, seed));
+    const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+    expect(mean(runs.map((r) => r.translatedShare))).toBeCloseTo(0.3, 1);
+    expect(mean(runs.map((r) => r.practiceShare))).toBeCloseTo(0.2, 1);
+  });
+
+  it('makes a single word a practice chunk about `practice` of the time', () => {
+    let translated = 0;
+    let practiced = 0;
+    const trials = 4000;
+    for (let seed = 0; seed < trials; seed++) {
+      const r = plan('Subscribe', 0.3, 0.2, seed);
+      translated += r.translatedShare;
+      practiced += r.practiceShare;
+    }
+    expect(translated / trials).toBeCloseTo(0.3, 1);
+    expect(practiced / trials).toBeCloseTo(0.2, 1);
+  });
+
+  it('caps practice at whatever the translated chunks leave', () => {
+    for (let seed = 0; seed < 50; seed++) {
+      const r = plan(ARTICLE, 0.7, 0.6, seed);
+      expect(r.translatedShare + r.practiceShare).toBeCloseTo(1, 5);
+    }
+  });
+
+  it('keeps the translated chunks the same when only the practice settings change', () => {
+    for (let seed = 0; seed < 50; seed++) {
+      expect(plan(ARTICLE, 0.4, 0.1, seed, 1, 0).translate).toEqual(plan(ARTICLE, 0.4, 0.5, seed, 1, 4).translate);
+    }
   });
 });

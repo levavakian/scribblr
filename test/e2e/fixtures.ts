@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { type BrowserContext, type Page, type Worker, test as base, chromium, expect } from '@playwright/test';
+import type { PageStats } from '../../src/shared/messages';
 import type { Settings } from '../../src/shared/settings';
 import { MockGemini } from './mock-gemini';
 
@@ -59,7 +60,8 @@ export const test = base.extend<ExtensionFixtures>({
             apiKey: 'test-key',
             apiBase,
             keyStatus: { state: 'valid', checkedAt: Date.now() },
-            settings: { enabled: true, disabledSites: [], sourceLang: 'en', targetLang: 'es', percent: 40, chunkSize: 30, ...settings },
+            // Practice chunks are off unless a test turns them on, so every underline is a translation.
+            settings: { enabled: true, disabledSites: [], sourceLang: 'en', targetLang: 'es', percent: 40, chunkSize: 30, practicePercent: 0, practiceChunkSize: 30, ...settings },
             ...extra,
           });
         },
@@ -90,7 +92,7 @@ export async function pageStats(worker: Worker, page: Page) {
   return worker.evaluate(async () => {
     const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     return chrome.tabs.sendMessage(tab!.id!, { type: 'page-stats' });
-  }) as Promise<{ state: string; words: number; translatedWords: number; translatedChunks: number; waiting: number }>;
+  }) as Promise<PageStats>;
 }
 
 /** The extension's stored state. */

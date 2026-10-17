@@ -43,6 +43,8 @@ export interface PageStats {
   state: PageState;
   blocks: number;
   translatedChunks: number;
+  /** Chunks left in the source language to practice on. */
+  practiceChunks: number;
   words: number;
   translatedWords: number;
   waiting: number;

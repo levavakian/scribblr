@@ -11,6 +11,10 @@ import type { Segmentation } from './segment';
 //    exactly the target, and a text lands within one (small) segment of it. A one-word button at 40%
 //    is translated in 40% of page views rather than 40% of the word.
 // 3. Merge picked segments that touch within one sentence, so the model translates them together.
+//
+// There are two sets of chunks: translated ones (shown in the target language) and practice ones
+// (left in the source language for the reader to translate in their head). Practice chunks are
+// picked the same way from the words the translated chunks left over (see planBoth).
 
 export interface PlanOptions {
   /** 0–1: the share of words to translate. */
@@ -54,15 +58,21 @@ function stopsWhere(n: number, endsAfter: (i: number) => boolean): number[] {
   return stops;
 }
 
-export function segmentRun(seg: Segmentation, sizeLevel: number, random: () => number): Array<[number, number]> {
+/** Cuts the run into segments. Units in `occupied` (already chunked) are skipped, and no segment spans them. */
+export function segmentRun(seg: Segmentation, sizeLevel: number, random: () => number, occupied?: readonly boolean[]): Array<[number, number]> {
   const n = seg.units.length;
-  const clauseStop = stopsWhere(n, (i) => seg.clauseEnd[i]!);
-  const sentenceStop = stopsWhere(n, (i) => i === n - 1 || seg.sentence[i] !== seg.sentence[i + 1] || seg.lineEnd[i]!);
-  const lineStop = stopsWhere(n, (i) => seg.lineEnd[i]!);
+  const edge = (i: number) => i === n - 1 || Boolean(occupied?.[i + 1]);
+  const clauseStop = stopsWhere(n, (i) => seg.clauseEnd[i]! || edge(i));
+  const sentenceStop = stopsWhere(n, (i) => edge(i) || seg.sentence[i] !== seg.sentence[i + 1] || seg.lineEnd[i]!);
+  const lineStop = stopsWhere(n, (i) => seg.lineEnd[i]! || edge(i));
   const weights = levelWeights(sizeLevel);
 
   const segments: Array<[number, number]> = [];
   for (let i = 0; i < n; ) {
+    if (occupied?.[i]) {
+      i++;
+      continue;
+    }
     let j: number;
     switch (sampleLevel(weights, random)) {
       case 0: // a word
@@ -92,12 +102,12 @@ export function segmentRun(seg: Segmentation, sizeLevel: number, random: () => n
   return segments;
 }
 
-export function planChunks(seg: Segmentation, options: PlanOptions): PlannedChunk[] {
+export function planChunks(seg: Segmentation, options: PlanOptions, occupied?: readonly boolean[]): PlannedChunk[] {
   const { fraction, sizeLevel, random } = options;
   if (!seg.units.length || fraction <= 0) return [];
 
   const words = (a: number, b: number) => seg.units.slice(a, b).filter((u) => u.translatable).length;
-  const candidates = segmentRun(seg, sizeLevel, random)
+  const candidates = segmentRun(seg, sizeLevel, random, occupied)
     .map(([a, b]) => ({ a, b, size: words(a, b) }))
     .filter((s) => s.size > 0);
   const target = candidates.reduce((n, s) => n + s.size, 0) * Math.min(1, fraction);
@@ -131,4 +141,20 @@ export function planChunks(seg: Segmentation, options: PlanOptions): PlannedChun
     }
   }
   return merged;
+}
+
+/**
+ * Picks both sets of chunks for a run: translated chunks first, then practice chunks from the words
+ * left over. Each set has its own random stream, so moving the practice sliders never reshuffles the
+ * translated chunks. The practice fraction is a share of all words, so it's scaled up to the
+ * leftover share (and capped at everything left): a one-word button with 30% translated and 20%
+ * practice is translated in 30% of page views and left to practice in 20%.
+ */
+export function planBoth(seg: Segmentation, translate: PlanOptions, practice: PlanOptions): { translate: PlannedChunk[]; practice: PlannedChunk[] } {
+  const translated = planChunks(seg, translate);
+  const occupied = new Array<boolean>(seg.units.length).fill(false);
+  for (const c of translated) occupied.fill(true, c.startUnit, c.endUnit);
+  const left = 1 - Math.min(1, Math.max(0, translate.fraction));
+  const fraction = left > 0 ? Math.min(1, practice.fraction / left) : 0;
+  return { translate: translated, practice: planChunks(seg, { ...practice, fraction }, occupied) };
 }

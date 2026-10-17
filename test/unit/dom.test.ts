@@ -158,6 +158,31 @@ describe('applyTranslations', () => {
     expect(document.getElementById('p')!.innerHTML).toBe('one two three four five');
   });
 
+  it('leaves a practice chunk as it is, with the translation for the tooltip', () => {
+    const p = document.getElementById('p1')!;
+    const before = p.innerHTML;
+    const link = document.getElementById('link')!;
+    const spec = chunkOf(runOf('Cows'), 'Read the cow docs or run moo --help');
+    const { applied, skipped } = applyTranslations(document, [
+      { id: 'c1', spec, translation: 'Lee <t1>los documentos</t1> o ejecuta <x2/>', mode: 'practice' },
+    ]);
+    expect(skipped).toEqual([]);
+    finishFlips(applied);
+    // The text doesn't change; the chunk is just marked, so the reader can try translating it.
+    expect(p.textContent).toBe('Cows are great. Read the cow docs or run moo --help.New line');
+    expect(link.querySelector(`${OWN_TAG}[data-mode="practice"]`)?.textContent).toBe('the cow docs');
+    expect(applied.chunks[0]).toMatchObject({ mode: 'practice', hover: { label: 'Translation', text: 'Lee los documentos o ejecuta moo --help' } });
+    revertTranslations(applied);
+    expect(p.innerHTML).toBe(before);
+  });
+
+  it('labels a translated chunk’s tooltip with the original', () => {
+    const spec = chunkOf(runOf('Cows'), 'Cows are great');
+    const { applied } = applyTranslations(document, [{ id: 'c1', spec, translation: 'Las vacas son <t1>geniales</t1>' }]);
+    expect(applied.chunks[0]).toMatchObject({ mode: 'translate', hover: { label: 'Original', text: 'Cows are great' } });
+    expect(document.querySelector(`${OWN_TAG}[data-mode]`)).toBeNull();
+  });
+
   it("keeps the page's own text when the page rewrote a node we had shortened", () => {
     document.body.innerHTML = '<p id="p">Streaming reply so far</p>';
     const p = document.getElementById('p')!;

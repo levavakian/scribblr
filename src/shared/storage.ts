@@ -12,6 +12,18 @@ export interface StoredState {
   usage: Usage;
   /** Model → the thinking setting it accepted (null: none), learned from rejected settings. */
   thinking: Record<string, Record<string, unknown> | null>;
+  /** The last API calls, newest last: for debugging (see the service worker's storage). */
+  log: CallLogEntry[];
+}
+
+export interface CallLogEntry {
+  at: number;
+  model: string;
+  /** 'ok', or the failure kind (rate-daily, transient, …). */
+  outcome: string;
+  ms: number;
+  chunks: number;
+  detail?: string;
 }
 
 export interface KeyStatus {

@@ -76,15 +76,42 @@ function renderSettings(): void {
   $<HTMLInputElement>('enabled').checked = settings.enabled;
   fillLanguages($('source-lang'), settings.sourceLang);
   fillLanguages($('target-lang'), settings.targetLang);
-  $<HTMLInputElement>('percent').value = String(settings.percent);
-  $<HTMLInputElement>('chunk-size').value = String(settings.chunkSize);
+  for (const [id, key] of SLIDERS) $<HTMLInputElement>(id).value = String(settings[key]);
   renderSliderLabels();
+  renderModeTitles();
   renderSite();
 }
 
+/** Slider element ids and the settings they control. */
+const SLIDERS = [
+  ['percent', 'percent'],
+  ['chunk-size', 'chunkSize'],
+  ['practice-percent', 'practicePercent'],
+  ['practice-size', 'practiceChunkSize'],
+] as const;
+
 function renderSliderLabels(): void {
-  $('percent-out').textContent = `${$<HTMLInputElement>('percent').value}% of words`;
-  $('size-out').textContent = `Mostly ${chunkSizeLabel(Number($<HTMLInputElement>('chunk-size').value)).toLowerCase()}s`;
+  const value = (id: string) => Number($<HTMLInputElement>(id).value);
+  const size = (id: string) => `Mostly ${chunkSizeLabel(value(id)).toLowerCase()}s`;
+  $('percent-out').textContent = `${value('percent')}% of words`;
+  $('size-out').textContent = size('chunk-size');
+  $('practice-out').textContent = `${value('practice-percent')}% of words`;
+  $('practice-size-out').textContent = size('practice-size');
+  // Practice chunks come from the words the translated chunks leave over.
+  const left = 100 - value('percent');
+  const note = $('practice-note');
+  note.hidden = value('practice-percent') <= left;
+  note.textContent = `Only ${left}% of words are left after the translated ones, so practice is capped at that.`;
+}
+
+/** "Shown in Spanish · hover for English" / "Left in English to practice · hover for Spanish". */
+function renderModeTitles(): void {
+  const source = languageName(settings.sourceLang);
+  const target = languageName(settings.targetLang);
+  $('shown-lang').textContent = target;
+  $('shown-hint').textContent = `hover for ${source}`;
+  $('practice-lang').textContent = source;
+  $('practice-hint').textContent = `hover for ${target}`;
 }
 
 function renderSite(): void {
@@ -114,17 +141,24 @@ function bindSettings(): void {
     await update({ disabledSites: on ? others : [...others, host] });
     void refreshPage();
   });
-  $<HTMLSelectElement>('source-lang').addEventListener('change', (e) => void update({ sourceLang: (e.target as HTMLSelectElement).value }));
-  $<HTMLSelectElement>('target-lang').addEventListener('change', (e) => void update({ targetLang: (e.target as HTMLSelectElement).value }));
+  $<HTMLSelectElement>('source-lang').addEventListener('change', async (e) => {
+    await update({ sourceLang: (e.target as HTMLSelectElement).value });
+    renderModeTitles();
+  });
+  $<HTMLSelectElement>('target-lang').addEventListener('change', async (e) => {
+    await update({ targetLang: (e.target as HTMLSelectElement).value });
+    renderModeTitles();
+  });
   $('swap').addEventListener('click', async () => {
     await update({ sourceLang: settings.targetLang, targetLang: settings.sourceLang });
     $<HTMLSelectElement>('source-lang').value = settings.sourceLang;
     $<HTMLSelectElement>('target-lang').value = settings.targetLang;
+    renderModeTitles();
   });
-  for (const id of ['percent', 'chunk-size']) {
+  for (const [id, key] of SLIDERS) {
     const input = $<HTMLInputElement>(id);
     input.addEventListener('input', renderSliderLabels);
-    input.addEventListener('change', () => void update(id === 'percent' ? { percent: Number(input.value) } : { chunkSize: Number(input.value) }));
+    input.addEventListener('change', () => void update({ [key]: Number(input.value) }));
   }
 }
 
@@ -341,8 +375,9 @@ async function refreshPage(): Promise<void> {
     line.textContent = `No ${languageName(settings.sourceLang)} text found yet.`;
   } else {
     const share = Math.round((100 * stats.translatedWords) / stats.words);
+    const practice = stats.practiceChunks ? `, ${stats.practiceChunks} to practice` : '';
     const waiting = stats.waiting ? ` · ${stats.waiting} waiting` : '';
-    line.textContent = `This page: ${stats.translatedChunks} chunks, ${share}% of words${waiting}`;
+    line.textContent = `This page: ${stats.translatedChunks} translated (${share}% of words)${practice}${waiting}`;
   }
 }
 

@@ -1,3 +1,4 @@
+import type { Hover } from './apply';
 import { OWN_TAG, TOOLTIP_TAG } from './own';
 
 const STYLE = `
@@ -19,14 +20,15 @@ const STYLE = `
 }
 `;
 
-/** Shows the original text when hovering a translated chunk. */
+/** Shows the original of a translated chunk, or the translation of a practice chunk, on hover. */
 export class Tooltip {
   private host: HTMLElement | null = null;
   private box: HTMLDivElement | null = null;
+  private label: HTMLSpanElement | null = null;
   private text: HTMLDivElement | null = null;
   private current: string | null = null;
 
-  constructor(private readonly originalOf: (chunkId: string) => string | undefined) {}
+  constructor(private readonly hoverOf: (chunkId: string) => Hover | undefined) {}
 
   attach(): void {
     document.addEventListener('mouseover', this.onOver, true);
@@ -40,7 +42,7 @@ export class Tooltip {
     window.removeEventListener('scroll', this.hide, { capture: true });
     this.hide();
     this.host?.remove();
-    this.host = this.box = this.text = null;
+    this.host = this.box = this.label = this.text = null;
   }
 
   private ensureHost(): void {
@@ -54,13 +56,13 @@ export class Tooltip {
     box.setAttribute('role', 'tooltip');
     const label = document.createElement('span');
     label.className = 'label';
-    label.textContent = 'Original';
     const text = document.createElement('div');
     box.append(label, text);
     root.append(style, box);
     document.documentElement.appendChild(host);
     this.host = host;
     this.box = box;
+    this.label = label;
     this.text = text;
   }
 
@@ -72,14 +74,15 @@ export class Tooltip {
     const slot = (event.target as Element | null)?.closest?.(OWN_TAG);
     const id = slot?.getAttribute('data-chunk');
     if (!slot || !id || id === this.current) return;
-    const original = this.originalOf(id);
-    if (!original) return;
+    const hover = this.hoverOf(id);
+    if (!hover?.text) return;
     this.hide();
     this.current = id;
     this.ensureHost();
     const slots = this.slotsOf(id);
     for (const el of slots) el.setAttribute('data-hover', '');
-    this.text!.textContent = original;
+    this.label!.textContent = hover.label;
+    this.text!.textContent = hover.text;
     this.place(slots, slot, event.clientX, event.clientY);
     this.box!.classList.add('show');
   };

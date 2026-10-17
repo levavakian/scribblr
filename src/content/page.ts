@@ -13,11 +13,11 @@ import { type Settings, chunkSizeLevel } from '../shared/settings';
 import type { RateState } from '../shared/storage';
 import { localDay } from '../shared/time';
 import { flip } from './animate';
-import { type AppliedBlock, applyTranslations, revertTranslations } from './apply';
+import { type AppliedBlock, type ChunkMode, type Hover, applyTranslations, revertTranslations } from './apply';
 import { type ChunkSpec, buildChunk } from './chunks';
 import { detectPageLanguage, languageOf } from './lang';
 import { ELEMENT_NODE, isOwnNode, originalText } from './own';
-import { planChunks } from './plan';
+import { planBoth } from './plan';
 import { type Run, type TextPiece, atomicRanges, blockContainerOf, hardBreaks, isExcluded, scanAddedSubtree, scanRuns } from './scan';
 import { segmentText } from './segment';
 import { Tooltip } from './tooltip';
@@ -43,6 +43,8 @@ const MAX_ATTEMPTS = 4;
 type BlockState = 'new' | 'detecting' | 'skipped' | 'planned' | 'requested' | 'ready' | 'applied' | 'done' | 'removed';
 
 interface Chunk {
+  /** Shown translated (hover: original), or left as is for practice (hover: translation). */
+  mode: ChunkMode;
   spec: ChunkSpec;
   key: string;
   words: number;
@@ -126,7 +128,7 @@ export class PageController {
   private fresh = new Set<Block>();
   private byContainer = new Map<Element, Block[]>();
   private byNode = new WeakMap<Node, Block>();
-  private chunkOriginals = new Map<string, string>();
+  private chunkHovers = new Map<string, Hover>();
   private shownTexts = new Set<string>();
   private nextId = 1;
 
@@ -155,7 +157,7 @@ export class PageController {
   private readonly mutations = new MutationObserver((records) => this.onMutations(records));
   private readonly visibility = new IntersectionObserver((entries) => this.onVisibility(entries));
   private readonly nearness = new IntersectionObserver((entries) => this.onNearness(entries), { rootMargin: '100% 0px 100% 0px' });
-  private readonly tooltip = new Tooltip((id) => this.chunkOriginals.get(id));
+  private readonly tooltip = new Tooltip((id) => this.chunkHovers.get(id));
   private readonly reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
   constructor(settings: Settings) {
@@ -219,7 +221,7 @@ export class PageController {
     this.fresh.clear();
     this.byContainer.clear();
     this.byNode = new WeakMap();
-    this.chunkOriginals.clear();
+    this.chunkHovers.clear();
     this.dirtyOwn.clear();
     this.dirtyAdded.clear();
     this.queuedRecords = [];
@@ -231,7 +233,7 @@ export class PageController {
   }
 
   stats(): PageStats {
-    const stats: PageStats = { state: 'active', blocks: 0, translatedChunks: 0, words: 0, translatedWords: 0, waiting: 0 };
+    const stats: PageStats = { state: 'active', blocks: 0, translatedChunks: 0, practiceChunks: 0, words: 0, translatedWords: 0, waiting: 0 };
     for (const b of this.blocks) {
       if (b.state === 'new' || b.state === 'detecting' || b.state === 'skipped') continue;
       stats.blocks++;
@@ -240,6 +242,10 @@ export class PageController {
       if (b.state !== 'applied') continue;
       for (const c of b.chunks) {
         if (c.translation === undefined || c.failed) continue;
+        if (c.mode === 'practice') {
+          stats.practiceChunks++;
+          continue;
+        }
         stats.translatedChunks++;
         stats.translatedWords += c.words;
       }
@@ -282,7 +288,7 @@ export class PageController {
     if (block.applied) {
       const applied = block.applied;
       this.ourChange(() => revertTranslations(applied, changedByPage));
-      for (const c of applied.chunks) this.chunkOriginals.delete(c.id);
+      for (const c of applied.chunks) this.chunkHovers.delete(c.id);
       block.applied = null;
     }
     block.state = 'removed';
@@ -534,12 +540,25 @@ export class PageController {
     const seg = segmentText(b.run.text, s.sourceLang, atomicRanges(b.run), hardBreaks(b.run));
     b.words = seg.units.filter((u) => u.translatable).length;
     // Seeded by the text, the settings and the day: the same text gets the same chunks (and cache
-    // hits) all day, and a fresh selection tomorrow.
-    const seed = hash32([b.run.text, s.sourceLang, s.targetLang, s.percent, s.chunkSize, localDay()].join('\u0000'));
-    const planned = planChunks(seg, { fraction: s.percent / 100, sizeLevel: chunkSizeLevel(s.chunkSize), random: seededRandom(seed) });
-    b.chunks = planned.map(({ startUnit, endUnit }) => {
+    // hits) all day, and a fresh selection tomorrow. Practice chunks get their own seed, so their
+    // sliders never reshuffle the translated chunks.
+    const day = localDay();
+    const seed = hash32([b.run.text, s.sourceLang, s.targetLang, s.percent, s.chunkSize, day].join('\u0000'));
+    const practiceSeed = hash32([b.run.text, s.sourceLang, s.targetLang, s.practicePercent, s.practiceChunkSize, day, 'practice'].join('\u0000'));
+    const planned = planBoth(
+      seg,
+      { fraction: s.percent / 100, sizeLevel: chunkSizeLevel(s.chunkSize), random: seededRandom(seed) },
+      { fraction: s.practicePercent / 100, sizeLevel: chunkSizeLevel(s.practiceChunkSize), random: seededRandom(practiceSeed) },
+    );
+    const both = [
+      ...planned.translate.map((c) => ({ ...c, mode: 'translate' as const })),
+      ...planned.practice.map((c) => ({ ...c, mode: 'practice' as const })),
+    ].sort((x, y) => x.startUnit - y.startUnit);
+    // Both kinds go to the model the same way: it doesn't need to know which is which.
+    b.chunks = both.map(({ startUnit, endUnit, mode }) => {
       const spec = buildChunk(b.run, seg.units[startUnit]!.start, seg.units[endUnit - 1]!.end);
       return {
+        mode,
         spec,
         key: hashKey([s.sourceLang, s.targetLang, b.run.text, spec.start, spec.end, spec.markup].join('\u0000')),
         words: seg.units.slice(startUnit, endUnit).filter((u) => u.translatable).length,
@@ -753,7 +772,7 @@ export class PageController {
       return;
     }
     const items = b.chunks.flatMap((c, i) =>
-      c.translation !== undefined && !c.failed ? [{ id: `${b.id}.${i}`, spec: c.spec, translation: c.translation }] : [],
+      c.translation !== undefined && !c.failed ? [{ id: `${b.id}.${i}`, spec: c.spec, translation: c.translation, mode: c.mode }] : [],
     );
     if (!items.length) {
       b.state = 'done';
@@ -775,7 +794,7 @@ export class PageController {
     const instant = this.reducedMotion.matches || this.shownTexts.has(textKey);
     this.shownTexts.add(textKey);
     for (const c of result.applied.chunks) {
-      this.chunkOriginals.set(c.id, c.original);
+      this.chunkHovers.set(c.id, c.hover);
       flip(c.slots, { instant });
     }
   }

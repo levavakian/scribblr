@@ -262,6 +262,44 @@ button.link {
   margin-top: 14px;
 }
 
+/* The two kinds of chunk: shown translated, and left as they are to practice on. */
+.mode {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.mode-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mode-title {
+  font-weight: 600;
+}
+
+.mode-hint {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.mode .slider {
+  margin-top: 8px;
+}
+
+.sample {
+  text-decoration: underline dashed;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.sample.practice {
+  text-decoration-color: rgba(47, 128, 237, 0.85);
+}
+
 .slider-head {
   display: flex;
   justify-content: space-between;

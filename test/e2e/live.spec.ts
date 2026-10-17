@@ -8,7 +8,7 @@ test('translates a page with the real API', async ({ worker, context, extensionI
   test.setTimeout(120_000);
   await worker.evaluate(async () => {
     await chrome.storage.local.set({
-      settings: { enabled: true, disabledSites: [], sourceLang: 'en', targetLang: 'es', percent: 50, chunkSize: 40 },
+      settings: { enabled: true, disabledSites: [], sourceLang: 'en', targetLang: 'es', percent: 40, chunkSize: 40, practicePercent: 25, practiceChunkSize: 30 },
     });
   });
   // Save the key through the popup, like a user: it lists models, then makes one tiny test call.
@@ -45,6 +45,19 @@ test('translates a page with the real API', async ({ worker, context, extensionI
   await page.waitForTimeout(200);
   await page.screenshot({ path: 'test-results/screenshots/live-hover.png', clip: { x: 0, y: 0, width: 1100, height: 520 } });
 
-  const usage = await worker.evaluate(async () => (await chrome.storage.local.get('usage')).usage);
+  // A practice chunk stays in English; its tooltip has the Spanish.
+  const practice = page.locator('#intro, #links, #code, li').locator('scribblr-t[data-mode="practice"]').first();
+  await page.mouse.move(5, 5);
+  await practice.hover();
+  await expect(page.locator('scribblr-tip .label')).toHaveText('Translation');
+  const answer = (await page.locator('scribblr-tip .tip div').textContent())!;
+  console.log(`practice chunk "${await practice.textContent()}" → hover "${answer}"`);
+  expect(answer).not.toBe(await practice.textContent());
+  await page.screenshot({ path: 'test-results/screenshots/live-practice.png', clip: { x: 0, y: 0, width: 1100, height: 520 } });
+
+  const { usage, log } = await worker.evaluate(async () => chrome.storage.local.get(['usage', 'log']));
   console.log('requests today:', JSON.stringify(usage));
+  for (const e of log as Array<{ model: string; outcome: string; ms: number; chunks: number; detail?: string }>) {
+    console.log(`  ${e.model}: ${e.outcome} in ${e.ms} ms (${e.chunks} chunks)${e.detail ? ` — ${e.detail.split('\n')[0]}` : ''}`);
+  }
 });
